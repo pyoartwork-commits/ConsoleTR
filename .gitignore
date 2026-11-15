@@ -1,7 +1,9 @@
 # macOS
 .DS_Store
-*.app
-build/
+# Only the built macOS bundle. A bare *.app pattern also hides windows/src/ConsoleTR.App
+# on case-insensitive file systems.
+/macos/ConsoleTR.app/
+/macos/build/
 DerivedData/
 xcuserdata/
 *.xcuserstate

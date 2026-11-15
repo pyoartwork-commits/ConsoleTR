@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Windows desktop app: window capture, Windows OCR and click-through overlays. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>ConsoleTR</AssemblyName>
+    <RootNamespace>ConsoleTR.App</RootNamespace>
+    <Version>0.1.0</Version>
+    <!-- Lets contributors on macOS or Linux compile the app; it only runs on Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ConsoleTR.Core\ConsoleTR.Core.csproj" />
+  </ItemGroup>
+</Project>

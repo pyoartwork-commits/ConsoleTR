@@ -38,7 +38,7 @@ struct CaptureTarget: Identifiable {
         let windows = content.windows.filter {
             $0.windowLayer == 0 && $0.frame.width > 100 && $0.frame.height > 100 &&
             $0.owningApplication?.processID != ProcessInfo.processInfo.processIdentifier
-        }.map { window in
+        }.map { (window: SCWindow) -> CaptureTarget in
             let app = window.owningApplication?.applicationName ?? "Uygulama"
             let display = content.displays.max {
                 func area(_ d: SCDisplay) -> CGFloat {
@@ -51,7 +51,7 @@ struct CaptureTarget: Identifiable {
                         filter: SCContentFilter(desktopIndependentWindow: window), displayID: display?.displayID,
                         windowID: window.windowID, isRemotePlay: app.localizedCaseInsensitiveContains("Remote Play") ||
                             (window.owningApplication?.bundleIdentifier.lowercased().contains("remoteplay") ?? false))
-        }.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        }.sorted { (a: CaptureTarget, b: CaptureTarget) in a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending }
         return windows + content.displays.enumerated().map { index, display in
             Self(id: "d-\(display.displayID)", title: "Ekran \(index + 1)",
                  filter: SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: []), displayID: display.displayID)
