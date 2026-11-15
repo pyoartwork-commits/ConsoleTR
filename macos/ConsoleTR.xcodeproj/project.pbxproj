@@ -1,0 +1,30 @@
+// !$*UTF8*$!
+{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
+01E98B0C6ED6743E19491A56 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Capture.swift"; sourceTree = "<group>"; };
+AF5BEA5713230AD47141523B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConsoleTR.swift"; sourceTree = "<group>"; };
+CBEC02D84B144B59D9E61BEF = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Controller.swift"; sourceTree = "<group>"; };
+EB5BC23A4066DE266A572462 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Core.swift"; sourceTree = "<group>"; };
+640436087C9B785AFB4543DE = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Overlay.swift"; sourceTree = "<group>"; };
+C5F14FFAA67137260C023CFF = { isa = PBXBuildFile; fileRef = 01E98B0C6ED6743E19491A56; };
+45999C511C940C0996A84676 = { isa = PBXBuildFile; fileRef = AF5BEA5713230AD47141523B; };
+A7F7D6C52894A8A72BEC7E9C = { isa = PBXBuildFile; fileRef = CBEC02D84B144B59D9E61BEF; };
+37D917F3FD290BB2D823CFA0 = { isa = PBXBuildFile; fileRef = EB5BC23A4066DE266A572462; };
+3AB1D539A13370F2F1942BEF = { isa = PBXBuildFile; fileRef = 640436087C9B785AFB4543DE; };
+F27FEDE2220BCD326AEE3E86 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (C5F14FFAA67137260C023CFF, 45999C511C940C0996A84676, A7F7D6C52894A8A72BEC7E9C, 37D917F3FD290BB2D823CFA0, 3AB1D539A13370F2F1942BEF); runOnlyForDeploymentPostprocessing = 0; };
+CE983E3DDE2A312829C0916B = { isa = PBXFileReference; lastKnownFileType = file; path = "Deneme.mp4"; sourceTree = "<group>"; };
+E92086D46EF1A4C55AD3E33A = { isa = PBXBuildFile; fileRef = CE983E3DDE2A312829C0916B; };
+DEE1EBCD105D3D47ADF43ABA = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (E92086D46EF1A4C55AD3E33A); runOnlyForDeploymentPostprocessing = 0; };
+7D1043473D55BFA90E8530D3 = { isa = PBXFileReference; explicitFileType = wrapper.application; path = ConsoleTR.app; sourceTree = BUILT_PRODUCTS_DIR; };
+FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (7D1043473D55BFA90E8530D3); name = Products; sourceTree = "<group>"; };
+2EB56BE3C2D93CDAB0C52E67 = { isa = PBXGroup; children = (01E98B0C6ED6743E19491A56, AF5BEA5713230AD47141523B, CBEC02D84B144B59D9E61BEF, EB5BC23A4066DE266A572462, 640436087C9B785AFB4543DE); path = Sources; sourceTree = "<group>"; };
+7B594B6DB375E1BF3F23CDD6 = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
+B28B7AF69320201D1CF206EB = { isa = PBXGroup; children = (2EB56BE3C2D93CDAB0C52E67, CE983E3DDE2A312829C0916B, 7B594B6DB375E1BF3F23CDD6, FBDC4F23F93125BBEEAE800C);  sourceTree = "<group>"; };
+4E9BE5208518F5BE4582BF50 = { isa = XCBuildConfiguration; name = Debug; buildSettings = {PRODUCT_NAME = ConsoleTR; PRODUCT_BUNDLE_IDENTIFIER = local.consoletr.desktop; INFOPLIST_FILE = Info.plist; CODE_SIGN_IDENTITY = "-"; ENABLE_HARDENED_RUNTIME = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone";}; };
+5A1446903D51AB5D9625FBA6 = { isa = XCBuildConfiguration; name = Release; buildSettings = {PRODUCT_NAME = ConsoleTR; PRODUCT_BUNDLE_IDENTIFIER = local.consoletr.desktop; INFOPLIST_FILE = Info.plist; CODE_SIGN_IDENTITY = "-"; ENABLE_HARDENED_RUNTIME = YES;}; };
+F497FD0CF9CA1625C4A860DE = { isa = XCConfigurationList; buildConfigurations = (4E9BE5208518F5BE4582BF50, 5A1446903D51AB5D9625FBA6); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+0E8A3AD980EC179856012B7E = { isa = PBXNativeTarget; buildConfigurationList = F497FD0CF9CA1625C4A860DE; buildPhases = (F27FEDE2220BCD326AEE3E86, DEE1EBCD105D3D47ADF43ABA); buildRules = (); dependencies = (); name = ConsoleTR; productReference = 7D1043473D55BFA90E8530D3; productType = "com.apple.product-type.application"; };
+843302E998F615868C358F42 = { isa = XCBuildConfiguration; name = Debug; buildSettings = {SDKROOT = macosx; ALWAYS_SEARCH_USER_PATHS = NO; ARCHS = arm64; MACOSX_DEPLOYMENT_TARGET = 26.0; SWIFT_VERSION = 6.0; SWIFT_OPTIMIZATION_LEVEL = "-Onone";}; };
+683DC4C02CF3A4C3C5BE100F = { isa = XCBuildConfiguration; name = Release; buildSettings = {SDKROOT = macosx; ALWAYS_SEARCH_USER_PATHS = NO; ARCHS = arm64; MACOSX_DEPLOYMENT_TARGET = 26.0; SWIFT_VERSION = 6.0;}; };
+49EA05A46B1A86EA7E413B43 = { isa = XCConfigurationList; buildConfigurations = (843302E998F615868C358F42, 683DC4C02CF3A4C3C5BE100F); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+98F54143AB4E86B28C3AFEE0 = { isa = PBXProject; buildConfigurationList = 49EA05A46B1A86EA7E413B43; compatibilityVersion = "Xcode 14.0"; developmentRegion = tr; knownRegions = (tr, Base); mainGroup = B28B7AF69320201D1CF206EB; productRefGroup = FBDC4F23F93125BBEEAE800C; projectDirPath = ""; projectRoot = ""; targets = (0E8A3AD980EC179856012B7E); };
+}; rootObject = 98F54143AB4E86B28C3AFEE0; }

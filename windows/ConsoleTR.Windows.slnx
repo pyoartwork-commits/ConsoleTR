@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ConsoleTR.Core/ConsoleTR.Core.csproj" />
+    <Project Path="src/ConsoleTR.App/ConsoleTR.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ConsoleTR.Core.Tests/ConsoleTR.Core.Tests.csproj" />
+  </Folder>
+</Solution>

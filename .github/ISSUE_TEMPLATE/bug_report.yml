@@ -1,0 +1,42 @@
+name: Hata bildirimi
+description: Algılama, çeviri veya katmanla ilgili bir sorun bildirin.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Güvenlik açıklarını burada değil, SECURITY.md'deki gizli yolla bildirin.
+        Kişisel bilgi içeren ekran görüntüsü eklemeyin; satırları metin olarak yazmanız yeterli.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [macOS, Windows]
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: Oyun ve yakalama yöntemi
+      placeholder: "The Witcher 3, PS Remote Play"
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Çeviri sağlayıcısı
+      options: [Apple Çeviri, Gemma 4 · Ollama, LibreTranslate, Çevrimdışı demo]
+  - type: textarea
+    id: what
+    attributes:
+      label: Ne oldu, ne bekliyordunuz?
+      description: Ekrandaki İngilizce satırı ve gösterilen çeviriyi (veya gösterilmediğini) yazın.
+    validations:
+      required: true
+  - type: input
+    id: timings
+    attributes:
+      label: Ana penceredeki süreler
+      placeholder: "OCR 70 ms · Çeviri 650 ms"
+  - type: input
+    id: version
+    attributes:
+      label: Sürüm / commit
