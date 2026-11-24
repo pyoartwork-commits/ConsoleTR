@@ -19,9 +19,13 @@ struct Track: Identifiable, Equatable {
     // The key `value` was translated from. It can lag behind `translationKey` while a
     // better OCR reading is being translated; the old value stays visible meanwhile.
     var valueKey: String?
-    // Recent raw OCR readings. Fast OCR on a moving scene misreads a few characters per
-    // frame, so the displayed text is the majority of the last readings.
-    private var reads: [String]
+    private struct Reading: Equatable {
+        let text: String
+        let box: CGRect
+    }
+    // Recent raw OCR readings. OCR on a moving scene misreads or clips parts of a line on
+    // some frames, so the displayed text is the majority of the last readings.
+    private var reads: [Reading]
     var translationKey: String { Self.key(for: line.text) }
     var needsTranslation: Bool { valueKey != translationKey }
 
@@ -30,20 +34,38 @@ struct Track: Identifiable, Equatable {
         self.value = value
         valueKey = value == nil ? nil : Self.key(for: line.text)
         shownAt = value == nil ? nil : ProcessInfo.processInfo.systemUptime
-        reads = [line.text]
+        reads = [Reading(text: line.text, box: line.box)]
     }
 
     // A translation that arrives late must stay long enough to be read once its line is gone.
     static func readingTime(_ text: String) -> Double { min(6, 1.5 + 0.06 * Double(text.count)) }
 
-    mutating func observe(_ text: String) {
-        reads.append(text)
+    // `tolerance` is the box jitter, in normalized units, that must not move the overlay.
+    mutating func observe(_ text: String, box: CGRect, tolerance: CGSize) {
+        reads.append(Reading(text: text, box: box))
         if reads.count > 5 { reads.removeFirst() }
-        let counts = Dictionary(grouping: reads, by: Self.key).mapValues(\.count)
-        let current = counts[translationKey] ?? 0
+        // A clipped reading ("Man, what…" for "Lamar: Man, what…") counts for the current text.
+        let current = translationKey
+        let counts = Dictionary(grouping: reads) { read -> String in
+            let key = Self.key(for: read.text)
+            return current.contains(key) ? current : key
+        }.mapValues(\.count)
         // Ties keep the current text so a single misread cannot restart translation.
-        let winner = counts.max { $0.value < $1.value }.flatMap { $0.value > current ? $0.key : nil } ?? translationKey
-        if let latest = reads.last(where: { Self.key(for: $0) == winner }) { line.text = latest }
+        let winner = counts.max { $0.value < $1.value }.flatMap { $0.value > counts[current, default: 0] ? $0.key : nil } ?? current
+        func loose(_ rect: CGRect) -> CGRect { rect.insetBy(dx: -tolerance.width, dy: -tolerance.height) }
+        if winner != current, let latest = reads.last(where: { Self.key(for: $0.text) == winner }) {
+            line.text = latest.text
+            line.box = latest.box
+        } else if Self.key(for: text) == current {
+            // A reading of the shown text places the overlay unless it only jitters.
+            line.text = text
+            if !loose(line.box).contains(box) || !loose(box).contains(line.box) { line.box = box }
+        } else if !loose(line.box).contains(box) {
+            // Another reading inside the box is clipped (a colored speaker name or a word lost
+            // on a bright patch) and used to shift the overlay sideways, so it changes nothing.
+            // One reaching outside the box means the line moved or was read more fully.
+            line.box = box
+        }
     }
 
     static func key(for text: String) -> String {
@@ -376,11 +398,10 @@ struct RecentTranslation: Identifiable {
             if let matched {
                 var track = remaining.remove(at: matched)
                 expiry.removeValue(forKey: track.id)?.cancel()
-                let old = track.line.box
-                let pixelShift = max(abs(old.midX - line.box.midX) * (anchor?.width ?? 1600),
-                                     abs(old.midY - line.box.midY) * (anchor?.height ?? 900))
-                track.observe(line.text)
-                if pixelShift >= 1.5 || abs(old.width - line.box.width) > 0.004 { track.line.box = line.box }
+                // Half a line height, at least 4 px, of OCR box jitter keeps the overlay still.
+                let size = anchor?.size ?? CGSize(width: 1600, height: 900)
+                let jitter = max(4, track.line.box.height * size.height * 0.5)
+                track.observe(line.text, box: line.box, tolerance: CGSize(width: jitter / size.width, height: jitter / size.height))
                 next.append(track)
             } else {
                 let cached = history.cached(key)
