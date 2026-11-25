@@ -9,6 +9,8 @@ struct CaptureTarget: Identifiable {
 
     var windowID: CGWindowID? = nil
     var isRemotePlay = false
+    // Window area in points; Remote Play's video window is its largest one.
+    var area: CGFloat = 0
 
     @MainActor func placement(lastFrame: CGRect?, captureRect: CGRect?) -> (frame: CGRect?, level: NSWindow.Level) {
         guard let windowID else {
@@ -33,13 +35,19 @@ struct CaptureTarget: Identifiable {
     }
 
     static func list() async throws -> [CaptureTarget] {
-        let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
+        // Off-screen windows are needed too: a full-screen Remote Play window lives in its own
+        // Space, so it is off screen while ConsoleTR is set up on the desktop and was missing
+        // from this list. ConsoleTR then picked another window and never saw the game.
+        let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
         let ownApps = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
-        let windows = content.windows.filter {
-            $0.windowLayer == 0 && $0.frame.width > 100 && $0.frame.height > 100 &&
-            $0.owningApplication?.processID != ProcessInfo.processInfo.processIdentifier
-        }.map { (window: SCWindow) -> CaptureTarget in
+        let windows = content.windows.compactMap { (window: SCWindow) -> CaptureTarget? in
+            guard window.windowLayer == 0, window.frame.width > 100, window.frame.height > 100,
+                  window.owningApplication?.processID != ProcessInfo.processInfo.processIdentifier else { return nil }
             let app = window.owningApplication?.applicationName ?? "Uygulama"
+            let remotePlay = app.localizedCaseInsensitiveContains("Remote Play") ||
+                (window.owningApplication?.bundleIdentifier.lowercased().contains("remoteplay") ?? false)
+            // Other apps keep many hidden windows; of those only Remote Play's are listed.
+            guard window.isOnScreen || remotePlay else { return nil }
             let display = content.displays.max {
                 func area(_ d: SCDisplay) -> CGFloat {
                     let r = d.frame.intersection(window.frame)
@@ -47,10 +55,10 @@ struct CaptureTarget: Identifiable {
                 }
                 return area($0) < area($1)
             }
-            return Self(id: "w-\(window.windowID)", title: app + (window.title.flatMap { $0.isEmpty ? nil : " — " + $0 } ?? ""),
+            let title = app + (window.title.flatMap { $0.isEmpty ? nil : " — " + $0 } ?? "") + (window.isOnScreen ? "" : " (başka masaüstünde)")
+            return Self(id: "w-\(window.windowID)", title: title,
                         filter: SCContentFilter(desktopIndependentWindow: window), displayID: display?.displayID,
-                        windowID: window.windowID, isRemotePlay: app.localizedCaseInsensitiveContains("Remote Play") ||
-                            (window.owningApplication?.bundleIdentifier.lowercased().contains("remoteplay") ?? false))
+                        windowID: window.windowID, isRemotePlay: remotePlay, area: window.frame.width * window.frame.height)
         }.sorted { (a: CaptureTarget, b: CaptureTarget) in a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending }
         return windows + content.displays.enumerated().map { index, display in
             Self(id: "d-\(display.displayID)", title: "Ekran \(index + 1)",
@@ -173,7 +181,8 @@ final class LiveCapture: NSObject, SCStreamOutput, SCStreamDelegate {
             }
             let title = window.title.flatMap { $0.isEmpty ? nil : $0 } ?? window.owningApplication?.applicationName ?? "Seçilen pencere"
             finish(.selected(CaptureTarget(id: "w-\(window.windowID)", title: title, filter: filter,
-                                           displayID: filter.includedDisplays.first?.displayID, windowID: window.windowID)))
+                                           displayID: filter.includedDisplays.first?.displayID, windowID: window.windowID,
+                                           area: window.frame.width * window.frame.height)))
         }
     }
 

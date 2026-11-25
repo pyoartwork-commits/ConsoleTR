@@ -144,7 +144,8 @@ enum Scene {
                   ids.count <= item.expected.count + 1, provider.cancels <= 1 else { throw AppFailure("\(item.name) kararlı izlenmedi.") }
         }
         try await flowingCaptions(app: app, game: game, view: view, quest: quest)
-        print("Otomatik algılama: kısa diyalog, iki satır, eşzamanlı görev, menü başlığı ve akan altyazı testleri geçti.")
+        try await steadyOverlay(app: app, game: game, view: view)
+        print("Otomatik algılama: kısa diyalog, iki satır, eşzamanlı görev, menü başlığı, akan altyazı ve sabit katman testleri geçti.")
     }
 
     // Captions replace each other every 2.5 s over a 720p stream while a quest tracker stays
@@ -204,6 +205,59 @@ enum Scene {
         // 2.5 s it is on screen and then stays for at least 40% of that time.
         guard first.allSatisfy({ ($0 ?? .infinity) <= 1500 }),
               zip(shown, samples).allSatisfy({ $0 * 10 >= $1 * 4 }) else { throw AppFailure("Akan altyazıların çevirisi yetişmedi.") }
+    }
+}
+
+extension AutoDetect {
+    // A colored speaker name or a bright background drops part of a caption on some frames.
+    // Those clipped readings must neither move the overlay nor change its text.
+    @MainActor static func steadyOverlay(app: NSApplication, game: NSWindow, view: NSImageView) async throws {
+        let full = "Lamar: Man, what you doin' here, dog? Get in the car."
+        let font = NSFont.systemFont(ofSize: 26, weight: .medium)
+        func width(_ text: String) -> CGFloat { (text as NSString).size(withAttributes: [.font: font]).width / 1600 }
+        let frames = (0..<60).map { t in
+            let name = t % 3 == 0 ? "" : "Lamar: ", tail = t % 5 == 0 ? "" : " Get in the car."
+            let visible = name + "Man, what you doin' here, dog?" + tail
+            // The visible part stays where it sits in the full line.
+            let left = 0.5 - width(full) / 2 + width("Lamar: ") - width(name)
+            return Scene.stream(Scene.frame(t, texts: [SceneText(text: visible, center: CGPoint(x: left + width(visible) / 2, y: 0.86), size: 26)]))
+        }
+        view.image = NSImage(cgImage: frames[0], size: .zero)
+        let animation = Task { @MainActor in
+            var tick = 0
+            while !Task.isCancelled {
+                tick += 1
+                view.image = NSImage(cgImage: frames[tick % frames.count], size: .zero)
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+        }
+        defer { animation.cancel() }
+        try await Task.sleep(for: .milliseconds(300))
+        let content = try await SCShareableContent.currentProcess
+        guard let window = content.windows.first(where: { Int($0.windowID) == game.windowNumber }) else { throw AppFailure("Deneme penceresi bulunamadı.") }
+        let model = Controller()
+        model.live = true
+        let target = CaptureTarget(id: "game", title: "Oyun testi", filter: SCContentFilter(desktopIndependentWindow: window), displayID: nil, windowID: window.windowID)
+        model.targets = [target]
+        model.selection = target.id
+        model.start(using: DemoProvider())
+        defer { model.stop() }
+        try await Task.sleep(for: .seconds(2))
+        var placements: [CGRect] = [], texts = Set<String>()
+        for _ in 0..<120 {
+            for panel in app.windows where panel is NSPanel && panel.isVisible {
+                guard let text = panel.contentView?.subviews.compactMap({ ($0 as? NSTextField)?.stringValue }).first else { continue }
+                texts.insert(text)
+                placements.append(panel.frame)
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let moves = zip(placements, placements.dropFirst()).filter { $0 != $1 }.count
+        let spread = (placements.map(\.midX).max() ?? 0) - (placements.map(\.midX).min() ?? 0)
+        print("Kısmi okumalarda katman — örnek:", placements.count, "yer değiştirme:", moves, String(format: "yatay oynama: %.1f px", spread), "metinler:", texts.sorted())
+        guard placements.count >= 100, moves <= 1, spread <= 3, texts == ["TR: " + full] else {
+            throw AppFailure("Katman kısmi okumalarda yerinde durmadı.")
+        }
     }
 }
 

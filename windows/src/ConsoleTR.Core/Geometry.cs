@@ -29,4 +29,7 @@ public readonly record struct NormRect(double X, double Y, double Width, double 
     }
 
     public NormRect Inflate(double dx, double dy) => new(X - dx, Y - dy, Width + 2 * dx, Height + 2 * dy);
+
+    public bool Contains(NormRect other) =>
+        other.MinX >= MinX && other.MaxX <= MaxX && other.MinY >= MinY && other.MaxY <= MaxY;
 }
