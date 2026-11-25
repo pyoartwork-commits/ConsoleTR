@@ -222,7 +222,7 @@ struct RecentTranslation: Identifiable {
             targets = try await list()
             needsPermission = false
             if !targets.contains(where: { $0.id == selection }) {
-                selection = targets.first { $0.isRemotePlay }?.id ?? targets.first?.id ?? ""
+                selection = Self.preferredSource(targets.map { ($0.id, $0.isRemotePlay, $0.area) }) ?? ""
             }
             status = targets.isEmpty ? "Açık pencere veya ekran bulunamadı." : "Kaynaklar hazır."
         } catch {
@@ -237,6 +237,11 @@ struct RecentTranslation: Identifiable {
             }
         }
     }
+    // Remote Play's video window is its largest; its other windows are dialogs and toolbars.
+    static func preferredSource(_ candidates: [(id: String, isRemotePlay: Bool, area: CGFloat)]) -> String? {
+        candidates.filter { $0.isRemotePlay }.max { $0.area < $1.area }?.id ?? candidates.first?.id
+    }
+
     func stop() {
         trackingTask?.cancel()
         trackingTask = nil
