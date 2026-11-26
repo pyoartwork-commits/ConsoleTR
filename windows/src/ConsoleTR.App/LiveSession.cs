@@ -114,7 +114,7 @@ internal sealed class LiveSession
     private void SyncOverlays(PixelRect? area)
     {
         bool banded = Style.SubtitleBand;
-        var bandTrack = banded && band.Top is not null ? SubtitleBand.Pick(Manager.Tracks, Manager.OnScreen) : null;
+        var bandTrack = banded && band.Top is not null ? SubtitleBand.Pick(Manager.Tracks) : null;
         // Lines in the band get no overlay of their own.
         var shown = Manager.Tracks.Where(t => t.Value is not null && !(banded && SubtitleBand.Holds(t))).ToDictionary(t => t.Id);
         foreach (var id in overlays.Keys.Where(id => area is null || (id == BandKey ? bandTrack is null : !shown.ContainsKey(id))).ToList())

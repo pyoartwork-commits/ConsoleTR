@@ -13,13 +13,15 @@ import ScreenCaptureKit
         await model.refresh { throw denied }
         await model.refresh { [] }
         guard !model.needsPermission, model.targets.isEmpty, !model.loading else { throw AppFailure("Başarılı sorgudan sonra izin uyarısı temizlenmedi.") }
-        // A full-screen Remote Play session has a large video window and small dialogs; the
-        // video window must win over other apps and over those dialogs.
-        let candidates: [(id: String, isRemotePlay: Bool, area: CGFloat)] = [
-            ("w-claude", false, 1_200_000), ("w-dialog", true, 864 * 432), ("w-video", true, 1920 * 1080), ("d-1", false, 0)]
-        guard Controller.preferredSource(candidates) == "w-video",
-              Controller.preferredSource([("w-claude", false, 1_200_000), ("d-1", false, 0)]) == "w-claude",
-              Controller.preferredSource([]) == nil else { throw AppFailure("Remote Play oyun penceresi seçilmedi.") }
-        print("İzin reddi, servis hatası, başarılı yeniden deneme ve Remote Play pencere seçimi doğrulandı.")
+        // The largest game source (Remote Play video, OBS projector) wins over small dialogs and
+        // other apps; OBS's main window, which shows the game only as a preview, comes last.
+        let candidates: [(id: String, kind: SourceKind, area: CGFloat)] = [
+            ("w-obs", .obsMain, 2_000_000), ("w-claude", .other, 1_200_000), ("w-dialog", .game, 864 * 432),
+            ("w-projector", .game, 1920 * 1080), ("d-1", .other, 0)]
+        guard Controller.preferredSource(candidates) == "w-projector",
+              Controller.preferredSource([("w-obs", .obsMain, 2_000_000), ("w-claude", .other, 1_200_000), ("d-1", .other, 0)]) == "w-claude",
+              Controller.preferredSource([("w-obs", .obsMain, 2_000_000)]) == "w-obs",
+              Controller.preferredSource([]) == nil else { throw AppFailure("Oyun penceresi seçilmedi.") }
+        print("İzin reddi, servis hatası, başarılı yeniden deneme ve oyun penceresi seçimi doğrulandı.")
     }
 }

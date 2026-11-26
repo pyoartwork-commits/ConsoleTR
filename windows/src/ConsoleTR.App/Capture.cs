@@ -7,14 +7,15 @@ namespace ConsoleTR.App;
 /// <summary>A window's client area in physical screen pixels.</summary>
 internal sealed record PixelRect(int X, int Y, int Width, int Height, double DpiScale);
 
-internal sealed record WindowItem(IntPtr Handle, string Title, bool IsRemotePlay, long Area)
+/// <summary>A game source is a Remote Play window or an OBS projector, which ConsoleTR should read.</summary>
+internal sealed record WindowItem(IntPtr Handle, string Title, bool IsGameSource, long Area)
 {
     public override string ToString() => Title;
 }
 
 internal static class TargetWindows
 {
-    /// <summary>Visible top-level windows of other apps, Remote Play first.</summary>
+    /// <summary>Visible top-level windows of other apps, game sources first.</summary>
     internal static List<WindowItem> List()
     {
         var items = new List<WindowItem>();
@@ -34,11 +35,15 @@ internal static class TargetWindows
             string app = "";
             try { app = Process.GetProcessById((int)process).ProcessName; } catch (ArgumentException) { } catch (InvalidOperationException) { }
             bool remotePlay = title.Contains("Remote Play", StringComparison.OrdinalIgnoreCase) || app.Contains("RemotePlay", StringComparison.OrdinalIgnoreCase);
-            items.Add(new WindowItem(window, title, remotePlay, (long)client.Width * client.Height));
+            // OBS's main window shows the game only as a preview next to OBS's own text.
+            bool projector = app.StartsWith("obs", StringComparison.OrdinalIgnoreCase) &&
+                (title.Contains("Projector", StringComparison.OrdinalIgnoreCase) || title.Contains("Projektör", StringComparison.OrdinalIgnoreCase));
+            bool game = remotePlay || projector;
+            items.Add(new WindowItem(window, game ? title + " (oyun görüntüsü)" : title, game, (long)client.Width * client.Height));
             return true;
         }, IntPtr.Zero);
-        // Remote Play's video window is its largest; its other windows are dialogs and toolbars.
-        return items.OrderByDescending(i => i.IsRemotePlay).ThenByDescending(i => i.IsRemotePlay ? i.Area : 0)
+        // The largest game source first: Remote Play's video window over its dialogs, a projector.
+        return items.OrderByDescending(i => i.IsGameSource).ThenByDescending(i => i.IsGameSource ? i.Area : 0)
             .ThenBy(i => i.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 

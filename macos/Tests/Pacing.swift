@@ -42,6 +42,8 @@ import ScreenCaptureKit
         _ = label("Retrieve the package", CGPoint(x: 500, y: 350))
         let caption = label("", CGPoint(x: 120, y: 50), width: 560)
         caption.alignment = .center
+        let standing = label("", CGPoint(x: 120, y: 125), width: 560)
+        standing.alignment = .center
         game.orderFrontRegardless()
         defer { game.orderOut(nil) }
         try await Task.sleep(for: .milliseconds(350))
@@ -126,6 +128,24 @@ import ScreenCaptureKit
         guard pairs.contains("Kratos: Open the door. → TR: Kratos: Open the door."), pairs.first == "Follow me. → TR: Follow me." else {
             throw AppFailure("Son çeviriler listesi eksik.")
         }
+        // 5. A line that stays on screen near the captions (like a status bar did) must not flash
+        //    in the band while the next caption is being translated.
+        caption.stringValue = ""
+        standing.stringValue = "Stay with me."
+        try await wait("Sabit satır çevrilmedi.") { model.recent.contains { $0.original == "Stay with me." } }
+        caption.stringValue = "Okay, so what, we just wait?"
+        try await wait("Altyazı çevrilmedi.") { shown().contains("TR: Okay, so what, we just wait?") }
+        try await Task.sleep(for: .milliseconds(300))
+        caption.stringValue = "Sit tight."
+        var flashes = 0, steps = 0
+        while !shown().contains("TR: Sit tight.") {
+            steps += 1
+            if shown().contains("TR: Stay with me.") { flashes += 1 }
+            if steps > 400 { throw AppFailure("Yeni altyazı çevrilmedi.") }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        print("Geçişte sabit satırın şeride girdiği örnek:", flashes, "/", steps)
+        guard flashes == 0 else { throw AppFailure("Ekranda duran başka bir satır altyazılar arasında şeride girdi.") }
         print("Tek sıralı çeviri önceliği, okuma süresi, kesintisiz geçiş, sabit altyazı şeridi ve son çeviriler testleri geçti.")
     }
 }

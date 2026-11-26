@@ -73,7 +73,8 @@ enum Scene {
         let bottom = CGRect(x: 0.46, y: 0.845, width: 0.08, height: 0.03)
         let rules: [(String, TextRole?)] = [("Oh, Geralt", .subtitle), ("Oh, Geralt.", .subtitle),
                                             ("come back to Kaer Morhen", .subtitle), ("The Witcher Wild Hunt", nil),
-                                            ("itcher Wild Hunt", nil), ("e Witcher Wild Hunt", nil), ("The Witche,Wild", nil)]
+                                            ("itcher Wild Hunt", nil), ("e Witcher Wild Hunt", nil), ("The Witche,Wild", nil),
+                                            ("CPU: 5.0%", nil), ("Kratos: Open the door.", .subtitle)]
         for (text, expected) in rules where GameTextClassifier.role(for: text, box: bottom) != expected {
             throw AppFailure("Sınıflandırma hatalı: \(text)")
         }

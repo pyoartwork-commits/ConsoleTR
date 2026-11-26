@@ -43,7 +43,9 @@ enum GameTextClassifier {
         if words.count >= 5, let language = NLLanguageRecognizer.dominantLanguage(for: text),
            language != .english { return nil }
         if headings.contains(where: { lower == $0 || lower.hasPrefix($0 + ":") || lower.hasPrefix($0 + " ") }) { return .objective }
-        if text.range(of: #"^[A-Z][A-Za-z '’-]{0,28}:\s*\S"#, options: .regularExpression) != nil { return .subtitle }
+        // "Speaker: line" needs words after the label; "CPU: 5.0%" from a status bar is no speech.
+        if let label = text.range(of: #"^[A-Z][A-Za-z '’-]{0,28}:\s*"#, options: .regularExpression),
+           text[label.upperBound...].range(of: #"\p{L}{2}"#, options: .regularExpression) != nil { return .subtitle }
         let punctuated = lower.last.map { ".!?…".contains($0) } ?? false
         let conversational = words.contains { ["i", "we", "you", "me", "our", "my", "your", "they"].contains($0) }
         if conversational && (punctuated || words.count >= 3) { return .subtitle }

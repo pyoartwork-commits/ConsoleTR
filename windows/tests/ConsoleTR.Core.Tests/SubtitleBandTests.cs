@@ -31,7 +31,7 @@ public class SubtitleBandTests
         var goal = new Track(new Detection(TextRole.Objective, "Find the key", new NormRect(0.75, 0.9, 0.2, 0.03)), "TR: Find the key", 0);
         Assert.False(band.Update([choice, goal], 0, 900));
         Assert.Null(band.Top);
-        Assert.Null(SubtitleBand.Pick([choice, goal], [choice, goal]));
+        Assert.Null(SubtitleBand.Pick([choice, goal]));
     }
 
     [Fact]
@@ -40,8 +40,26 @@ public class SubtitleBandTests
         var old = Line("Wait for me.", new NormRect(0.4, 0.86, 0.2, 0.03), 1);
         var current = Line("Follow me.", new NormRect(0.4, 0.86, 0.2, 0.03), 2);
         var untranslated = Line("Get in the car.", new NormRect(0.4, 0.86, 0.2, 0.03), 3, value: null);
-        Assert.Same(current, SubtitleBand.Pick([old, current, untranslated], [current, untranslated]));
-        // Once every line has left the screen, the newest one keeps the band until it expires.
-        Assert.Same(current, SubtitleBand.Pick([old, current], []));
+        Assert.Same(current, SubtitleBand.Pick([old, current, untranslated]));
+    }
+
+    [Fact]
+    public void PreviousCaptionStaysWhileTheNextIsTranslated()
+    {
+        // A line that stays on screen must not flash in between two captions.
+        var standing = Line("Hold the line.", new NormRect(0.4, 0.93, 0.2, 0.03), 0);
+        var previous = Line("Hey, man, I spoke to Brian.", new NormRect(0.35, 0.86, 0.3, 0.03), 5);
+        var next = Line("He says he wants to talk to you personally", new NormRect(0.3, 0.86, 0.4, 0.03), 6, value: null);
+        Assert.Same(previous, SubtitleBand.Pick([standing, previous, next]));
+    }
+
+    [Fact]
+    public void OffCentreAndMidScreenLinesStayOutOfTheBand()
+    {
+        var phone = Line("Incoming Call...", new NormRect(0.82, 0.90, 0.08, 0.02), 0);
+        var middle = Line("We need to talk.", new NormRect(0.45, 0.54, 0.1, 0.03), 0);
+        Assert.False(SubtitleBand.Holds(phone));
+        Assert.False(SubtitleBand.Holds(middle));
+        Assert.Null(SubtitleBand.Pick([phone, middle]));
     }
 }

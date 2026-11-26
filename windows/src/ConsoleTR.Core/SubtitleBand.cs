@@ -12,7 +12,10 @@ public sealed class SubtitleBand
     /// <summary>Top of the band's source area, normalized; the band sits above it.</summary>
     public double? Top { get; private set; }
 
-    public static bool Holds(Track track) => track.Line.Role == TextRole.Subtitle && track.Line.Box.MidY >= 0.5;
+    // Captions sit low and centred. Off-centre lines, such as a phone card in a corner, keep their
+    // own overlay next to them.
+    public static bool Holds(Track track) =>
+        track.Line.Role == TextRole.Subtitle && track.Line.Box.MidY >= 0.6 && Math.Abs(track.Line.Box.MidX - 0.5) < 0.25;
 
     /// <summary>Follows the tallest caption of the last 10 s, ignoring less than 8 px of OCR jitter.</summary>
     /// <returns>Whether the band moved.</returns>
@@ -27,11 +30,9 @@ public sealed class SubtitleBand
         return true;
     }
 
-    /// <summary>The newest caption on screen with a translation, else the newest one still being read.</summary>
-    public static Track? Pick(IEnumerable<Track> all, IEnumerable<Track> onScreen)
-    {
-        var visible = onScreen.ToHashSet();
-        var band = all.Where(t => Holds(t) && t.Value is not null).ToList();
-        return band.Where(visible.Contains).MaxBy(t => t.Since) ?? band.MaxBy(t => t.Since);
-    }
+    /// <summary>
+    /// The newest translated caption. While the next caption is still being translated, the
+    /// previous one stays instead of an older line flashing in between.
+    /// </summary>
+    public static Track? Pick(IEnumerable<Track> all) => all.Where(t => Holds(t) && t.Value is not null).MaxBy(t => t.Since);
 }

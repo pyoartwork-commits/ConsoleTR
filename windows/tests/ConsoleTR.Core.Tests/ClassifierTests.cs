@@ -16,6 +16,7 @@ public class ClassifierTests
     [InlineData("e Witcher Wild Hunt", null)]
     [InlineData("The Witche,Wild", null)]
     [InlineData("Press X to continue", null)]
+    [InlineData("CPU: 5.0%", null)]
     public void BottomCentreLines(string text, TextRole? expected) =>
         Assert.Equal(expected, GameTextClassifier.Classify(text, BottomCentre));
 

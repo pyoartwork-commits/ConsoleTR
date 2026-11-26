@@ -1,6 +1,10 @@
 @preconcurrency import ScreenCaptureKit
 import CoreImage
 
+// Game sources are what ConsoleTR should read: a Remote Play window or an OBS projector. OBS's
+// main window shows the game only as a small preview next to OBS's own text ("CPU: 5.0%").
+enum SourceKind: Sendable { case game, obsMain, other }
+
 struct CaptureTarget: Identifiable {
     let id: String
     let title: String
@@ -8,7 +12,7 @@ struct CaptureTarget: Identifiable {
     let displayID: CGDirectDisplayID?
 
     var windowID: CGWindowID? = nil
-    var isRemotePlay = false
+    var kind = SourceKind.other
     // Window area in points; Remote Play's video window is its largest one.
     var area: CGFloat = 0
 
@@ -44,8 +48,11 @@ struct CaptureTarget: Identifiable {
             guard window.windowLayer == 0, window.frame.width > 100, window.frame.height > 100,
                   window.owningApplication?.processID != ProcessInfo.processInfo.processIdentifier else { return nil }
             let app = window.owningApplication?.applicationName ?? "Uygulama"
-            let remotePlay = app.localizedCaseInsensitiveContains("Remote Play") ||
-                (window.owningApplication?.bundleIdentifier.lowercased().contains("remoteplay") ?? false)
+            let bundle = window.owningApplication?.bundleIdentifier.lowercased() ?? ""
+            let remotePlay = app.localizedCaseInsensitiveContains("Remote Play") || bundle.contains("remoteplay")
+            let obs = bundle.contains("obsproject") || app.hasPrefix("OBS")
+            let projector = obs && ["projektör", "projector"].contains { (window.title ?? "").localizedCaseInsensitiveContains($0) }
+            let kind: SourceKind = remotePlay || projector ? .game : obs ? .obsMain : .other
             // Other apps keep many hidden windows; of those only Remote Play's are listed.
             guard window.isOnScreen || remotePlay else { return nil }
             let display = content.displays.max {
@@ -55,10 +62,11 @@ struct CaptureTarget: Identifiable {
                 }
                 return area($0) < area($1)
             }
-            let title = app + (window.title.flatMap { $0.isEmpty ? nil : " — " + $0 } ?? "") + (window.isOnScreen ? "" : " (başka masaüstünde)")
+            let title = app + (window.title.flatMap { $0.isEmpty ? nil : " — " + $0 } ?? "") +
+                (kind == .game ? " (oyun görüntüsü)" : "") + (window.isOnScreen ? "" : " (başka masaüstünde)")
             return Self(id: "w-\(window.windowID)", title: title,
                         filter: SCContentFilter(desktopIndependentWindow: window), displayID: display?.displayID,
-                        windowID: window.windowID, isRemotePlay: remotePlay, area: window.frame.width * window.frame.height)
+                        windowID: window.windowID, kind: kind, area: window.frame.width * window.frame.height)
         }.sorted { (a: CaptureTarget, b: CaptureTarget) in a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending }
         return windows + content.displays.enumerated().map { index, display in
             Self(id: "d-\(display.displayID)", title: "Ekran \(index + 1)",

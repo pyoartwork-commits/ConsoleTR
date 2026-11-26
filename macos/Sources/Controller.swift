@@ -230,7 +230,7 @@ struct RecentTranslation: Identifiable {
             targets = try await list()
             needsPermission = false
             if !targets.contains(where: { $0.id == selection }) {
-                selection = Self.preferredSource(targets.map { ($0.id, $0.isRemotePlay, $0.area) }) ?? ""
+                selection = Self.preferredSource(targets.map { ($0.id, $0.kind, $0.area) }) ?? ""
             }
             status = targets.isEmpty ? "Açık pencere veya ekran bulunamadı." : "Kaynaklar hazır."
         } catch {
@@ -245,9 +245,11 @@ struct RecentTranslation: Identifiable {
             }
         }
     }
-    // Remote Play's video window is its largest; its other windows are dialogs and toolbars.
-    static func preferredSource(_ candidates: [(id: String, isRemotePlay: Bool, area: CGFloat)]) -> String? {
-        candidates.filter { $0.isRemotePlay }.max { $0.area < $1.area }?.id ?? candidates.first?.id
+    // The largest game source wins: Remote Play's video window over its dialogs, an OBS projector
+    // over everything else. OBS's main window is a last resort.
+    static func preferredSource(_ candidates: [(id: String, kind: SourceKind, area: CGFloat)]) -> String? {
+        candidates.filter { $0.kind == .game }.max { $0.area < $1.area }?.id ??
+            candidates.first { $0.kind == .other }?.id ?? candidates.first?.id
     }
 
     func stop() {
@@ -526,7 +528,9 @@ struct RecentTranslation: Identifiable {
     }
 
     private func inBand(_ track: Track) -> Bool {
-        style.subtitleBand && track.line.role == .subtitle && track.line.box.midY >= 0.5
+        // Captions sit low and centred. Off-centre lines, such as a phone card in a corner, keep
+        // their own overlay next to them.
+        style.subtitleBand && track.line.role == .subtitle && track.line.box.midY >= 0.6 && abs(track.line.box.midX - 0.5) < 0.25
     }
 
     // The band sits just above the tallest caption of the last 10 s and ignores OCR jitter.
@@ -575,9 +579,10 @@ struct RecentTranslation: Identifiable {
             }
             overlay(track.id).show(value, box: track.line.box)
         }
-        // The band shows the newest caption on screen, or the newest one still being read.
+        // The band shows the newest translated caption. While the next caption is still being
+        // translated, the previous one stays instead of an older line flashing in between.
         let band = tracks.filter { inBand($0) && $0.value != nil }
-        if let shown = band.filter({ expiry[$0.id] == nil }).max(by: { $0.since < $1.since }) ?? band.max(by: { $0.since < $1.since }),
+        if let shown = band.max(by: { $0.since < $1.since }),
            let value = shown.value, let bandTop {
             overlay(bandKey).show(value, box: CGRect(x: 0.1, y: bandTop, width: 0.8, height: 0), above: true)
         } else {

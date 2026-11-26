@@ -21,6 +21,10 @@ struct Controls: View {
                         }
                         Button(model.loading ? "Aranıyor…" : "Kaynakları getir") { Task { await model.refresh() } }.disabled(model.loading || model.picking)
                     }
+                    if model.targets.first(where: { $0.id == model.selection })?.kind == .obsMain {
+                        Text("OBS’in ana penceresi seçili: ConsoleTR oyunu küçük önizlemeden ve OBS’in kendi yazılarıyla birlikte okur. Oyun için “Projektör” penceresini seçin.")
+                            .font(.caption).foregroundStyle(.orange)
+                    }
                     Button("macOS ile pencere seç…") { model.chooseWindow() }.disabled(model.loading || model.picking)
                     if model.needsPermission {
                         Button("Ekran kaydı ayarlarını aç") { model.openCaptureSettings() }

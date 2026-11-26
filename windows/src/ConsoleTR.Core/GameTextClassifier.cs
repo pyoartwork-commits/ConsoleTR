@@ -28,8 +28,10 @@ public static partial class GameTextClassifier
         "be", "not", "do", "have", "what", "i", "you", "we", "me", "my", "your", "he", "she", "they", "at", "or",
     };
 
-    [GeneratedRegex(@"^[A-Z][A-Za-z '’-]{0,28}:\s*\S")]
+    [GeneratedRegex(@"^[A-Z][A-Za-z '’-]{0,28}:\s*")]
     private static partial Regex SpeakerLabel();
+    [GeneratedRegex(@"\p{L}{2}")]
+    private static partial Regex Word();
 
     public static TextRole? Classify(string text, NormRect box)
     {
@@ -39,7 +41,8 @@ public static partial class GameTextClassifier
         if (words.Count >= 5 && !words.Any(EnglishMarkers.Contains)) return null;
         if (Headings.Any(h => lower == h || lower.StartsWith(h + ":", StringComparison.Ordinal) || lower.StartsWith(h + " ", StringComparison.Ordinal)))
             return TextRole.Objective;
-        if (SpeakerLabel().IsMatch(text)) return TextRole.Subtitle;
+        // "Speaker: line" needs words after the label; "CPU: 5.0%" from a status bar is no speech.
+        if (SpeakerLabel().Match(text) is { Success: true } label && Word().IsMatch(text[label.Length..])) return TextRole.Subtitle;
         bool punctuated = lower.Length > 0 && ".!?…".Contains(lower[^1]);
         bool conversational = words.Any(Pronouns.Contains);
         if (conversational && (punctuated || words.Count >= 3)) return TextRole.Subtitle;
