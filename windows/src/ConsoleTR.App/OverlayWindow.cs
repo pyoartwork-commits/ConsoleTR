@@ -7,7 +7,7 @@ using ConsoleTR.Core;
 
 namespace ConsoleTR.App;
 
-internal sealed record OverlayStyle(double FontSize = 23, double Position = 4, double Opacity = 0.45, bool Light = false);
+internal sealed record OverlayStyle(double FontSize = 23, double Position = 4, double Opacity = 0.45, bool Light = false, bool SubtitleBand = true);
 
 /// <summary>A click-through, always-on-top translation bubble next to the source text.</summary>
 internal sealed class OverlayWindow : Window
@@ -50,8 +50,11 @@ internal sealed class OverlayWindow : Window
         };
     }
 
-    /// <summary>Places the translation below the source text, or above it near the bottom edge.</summary>
-    internal void Present(string text, NormRect box, PixelRect frame, OverlayStyle style)
+    /// <summary>
+    /// Places the translation below the source text, or above it near the bottom edge. With
+    /// <paramref name="above"/> it always goes above the box, as the caption band does.
+    /// </summary>
+    internal void Present(string text, NormRect box, PixelRect frame, OverlayStyle style, bool above = false)
     {
         double scale = frame.DpiScale;
         label.Text = text;
@@ -68,7 +71,8 @@ internal sealed class OverlayWindow : Window
         double width = ActualWidth * scale, height = ActualHeight * scale, gap = style.Position * scale;
         double left = Math.Min(frame.X + frame.Width - width, Math.Max(frame.X, sourceX + sourceWidth / 2 - width / 2));
         double below = sourceY + sourceHeight + gap;
-        double top = below + height <= frame.Y + frame.Height ? below : Math.Max(frame.Y, sourceY - gap - height);
+        double over = Math.Max(frame.Y, sourceY - gap - height);
+        double top = !above && below + height <= frame.Y + frame.Height ? below : over;
         Native.SetWindowPos(handle, Native.HWND_TOPMOST, (int)Math.Round(left), (int)Math.Round(top), 0, 0,
             Native.SWP_NOSIZE | Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
     }

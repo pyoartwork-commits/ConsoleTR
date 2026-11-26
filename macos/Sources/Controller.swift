@@ -139,8 +139,16 @@ struct RecentTranslation: Identifiable {
     @Published var translationMS = 0.0
     @Published var needsPermission = false
     @Published var style = OverlayStyle() {
-        didSet { for overlay in overlays.values { overlay.style = style } }
+        didSet {
+            for overlay in overlays.values { overlay.style = style }
+            if oldValue.subtitleBand != style.subtitleBand, running { render() }
+        }
     }
+    // Every caption has its own box, so translations placed next to each line moved with every
+    // new line. Lower-half captions share one band above them; only its text changes.
+    private let bandKey = UUID()
+    private var bandSamples: [(time: Double, top: CGFloat)] = []
+    private var bandTop: CGFloat?
     private var trackingTask: Task<Void, Never>?
     private var job: Task<Void, Never>?
     private var capture: LiveCapture?
@@ -274,6 +282,8 @@ struct RecentTranslation: Identifiable {
             ? [ScanZone(role: .subtitle, rect: subtitle), ScanZone(role: .objective, rect: objectiveRegion)]
             : [ScanZone(role: nil, rect: region)]
         history = SubtitleHistory()
+        bandSamples = []
+        bandTop = nil
         reader = SubtitleReader()
         translations = 0; hits = 0
         recent = []
@@ -437,7 +447,8 @@ struct RecentTranslation: Identifiable {
                 requestTranslations()
             }
         }
-        if tracks != next {
+        let bandMoved = updateBand(next)
+        if tracks != next || bandMoved {
             tracks = next
             render()
         }
@@ -514,6 +525,21 @@ struct RecentTranslation: Identifiable {
         }
     }
 
+    private func inBand(_ track: Track) -> Bool {
+        style.subtitleBand && track.line.role == .subtitle && track.line.box.midY >= 0.5
+    }
+
+    // The band sits just above the tallest caption of the last 10 s and ignores OCR jitter.
+    private func updateBand(_ lines: [Track]) -> Bool {
+        let now = ProcessInfo.processInfo.systemUptime
+        for track in lines where expiry[track.id] == nil && inBand(track) { bandSamples.append((now, track.line.box.minY)) }
+        bandSamples.removeAll { now - $0.time > 10 }
+        guard let top = bandSamples.map(\.top).min() else { return false }
+        if let bandTop, abs(top - bandTop) * (anchor?.height ?? 900) < 8 { return false }
+        bandTop = top
+        return true
+    }
+
     private func render() {
         // A newer translation over the place of a line that is gone replaces it.
         let onScreen = tracks.filter { expiry[$0.id] == nil }
@@ -533,15 +559,29 @@ struct RecentTranslation: Identifiable {
             recent.insert(RecentTranslation(key: key, original: track.line.text, translation: value), at: 0)
             if recent.count > 8 { recent.removeLast() }
         }
+        func overlay(_ key: UUID) -> Overlay {
+            if let existing = overlays[key] { return existing }
+            let created = Overlay()
+            overlays[key] = created
+            created.style = style
+            created.move(to: anchor, level: overlayLevel)
+            return created
+        }
         for track in tracks {
             guard let value = track.value else { continue }
-            let overlay = overlays[track.id] ?? Overlay()
-            if overlays[track.id] == nil {
-                overlays[track.id] = overlay
-                overlay.style = style
-                overlay.move(to: anchor, level: overlayLevel)
+            if inBand(track) {
+                overlays.removeValue(forKey: track.id)?.hide()
+                continue
             }
-            overlay.show(value, box: track.line.box)
+            overlay(track.id).show(value, box: track.line.box)
+        }
+        // The band shows the newest caption on screen, or the newest one still being read.
+        let band = tracks.filter { inBand($0) && $0.value != nil }
+        if let shown = band.filter({ expiry[$0.id] == nil }).max(by: { $0.since < $1.since }) ?? band.max(by: { $0.since < $1.since }),
+           let value = shown.value, let bandTop {
+            overlay(bandKey).show(value, box: CGRect(x: 0.1, y: bandTop, width: 0.8, height: 0), above: true)
+        } else {
+            overlays.removeValue(forKey: bandKey)?.hide()
         }
         status = tracks.isEmpty ? "Metin bekleniyor…" : "Metinler izleniyor."
     }

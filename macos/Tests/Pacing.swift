@@ -95,6 +95,10 @@ import ScreenCaptureKit
         caption.stringValue = "Wait for me."
         try await wait("İlk altyazı çevrilmedi.") { shown().contains("TR: Wait for me.") }
         try await Task.sleep(for: .milliseconds(300))
+        func panel(_ text: String) -> NSWindow? {
+            app.windows.first { $0 is NSPanel && $0.isVisible && $0.contentView?.subviews.contains { ($0 as? NSTextField)?.stringValue == text } == true }
+        }
+        let firstBand = panel("TR: Wait for me.")?.frame
         caption.stringValue = "Follow me."
         var gaps = 0, samples = 0
         while !shown().contains("TR: Follow me.") {
@@ -107,6 +111,14 @@ import ScreenCaptureKit
         let captions = shown().filter { $0 == "TR: Wait for me." || $0 == "TR: Follow me." }
         print("Geçişte boş örnek:", gaps, "/", samples, "geçişten sonra altyazı katmanları:", captions)
         guard gaps == 0, captions == ["TR: Follow me."] else { throw AppFailure("Altyazı geçişinde boşluk veya çift katman oluştu.") }
+        // Both captions are shown in one band centred on the window, above the caption, at the
+        // same height, although "Follow me." is shorter than "Wait for me.".
+        guard let firstBand, let secondBand = panel("TR: Follow me.")?.frame,
+              abs(firstBand.minY - secondBand.minY) < 1, abs(firstBand.midX - game.frame.midX) < 2,
+              abs(secondBand.midX - game.frame.midX) < 2, secondBand.minY > game.frame.minY + 60 else {
+            throw AppFailure("Altyazı şeridi sabit durmadı.")
+        }
+        print("Altyazı şeridi iki satırda aynı yerde:", Int(firstBand.minY), Int(secondBand.minY), "pencere ortası:", Int(game.frame.midX), Int(secondBand.midX))
 
         // 4. Translations remain listed in memory after they leave the screen.
         let pairs = model.recent.map { "\($0.original) → \($0.translation)" }
@@ -114,6 +126,6 @@ import ScreenCaptureKit
         guard pairs.contains("Kratos: Open the door. → TR: Kratos: Open the door."), pairs.first == "Follow me. → TR: Follow me." else {
             throw AppFailure("Son çeviriler listesi eksik.")
         }
-        print("Tek sıralı çeviri önceliği, okuma süresi, kesintisiz geçiş ve son çeviriler testleri geçti.")
+        print("Tek sıralı çeviri önceliği, okuma süresi, kesintisiz geçiş, sabit altyazı şeridi ve son çeviriler testleri geçti.")
     }
 }

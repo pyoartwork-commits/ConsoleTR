@@ -5,6 +5,8 @@ struct OverlayStyle: Equatable {
     var position = 4.0
     var opacity = 0.45
     var lightBackground = false
+    // Show lower-half caption translations in one fixed band instead of next to each line.
+    var subtitleBand = true
 }
 
 @MainActor final class Overlay {
@@ -35,11 +37,13 @@ struct OverlayStyle: Equatable {
     private var anchor: CGRect?
     private var text = ""
     private var box = CGRect.zero
-    func show(_ text: String, box: CGRect) {
-        guard self.text != text || self.box != box else { return }
+    private var above = false
+    // `above` places the overlay over the box instead of below it, as the caption band does.
+    func show(_ text: String, box: CGRect, above: Bool = false) {
+        guard self.text != text || self.box != box || self.above != above else { return }
         self.box = box
         self.text = text
-
+        self.above = above
         layout()
     }
     func move(to frame: CGRect?, level: NSWindow.Level) {
@@ -67,7 +71,8 @@ struct OverlayStyle: Equatable {
         let height = min(frame.height, max(40, label.fittingSize.height + 18))
         let left = min(frame.maxX - width, max(frame.minX, source.midX - width / 2))
         let below = source.minY - height - style.position
-        let bottom = below >= frame.minY ? below : min(frame.maxY - height, source.maxY + style.position)
+        let over = min(frame.maxY - height, source.maxY + style.position)
+        let bottom = above || below < frame.minY ? over : below
         panel.setFrame(NSRect(x: left, y: max(frame.minY, bottom), width: width, height: height), display: true)
         label.frame = NSRect(x: 20, y: 9, width: width - 40, height: height - 18)
         panel.orderFrontRegardless()

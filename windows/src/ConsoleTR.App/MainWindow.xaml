@@ -68,6 +68,7 @@
       <Slider x:Name="OpacitySlider" Minimum="0" Maximum="1" Value="0.45" ValueChanged="Style_Changed" />
     </DockPanel>
 
+    <CheckBox x:Name="BandCheck" Content="Altyazı çevirisini sabit şeritte göster" IsChecked="True" Margin="0,8,0,0" Click="BandCheck_Click" />
     <CheckBox x:Name="ShowCheck" Content="Çeviriyi göster (Ctrl + Alt + T)" IsChecked="True" Margin="0,12,0,0" Click="ShowCheck_Click" />
 
     <DockPanel Margin="0,12,0,0">
