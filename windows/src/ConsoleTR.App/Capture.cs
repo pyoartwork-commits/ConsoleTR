@@ -7,14 +7,15 @@ namespace ConsoleTR.App;
 /// <summary>A window's client area in physical screen pixels.</summary>
 internal sealed record PixelRect(int X, int Y, int Width, int Height, double DpiScale);
 
-internal sealed record WindowItem(IntPtr Handle, string Title, bool IsRemotePlay)
+/// <summary>A game source is a Remote Play window or an OBS projector, which ConsoleTR should read.</summary>
+internal sealed record WindowItem(IntPtr Handle, string Title, bool IsGameSource, long Area)
 {
     public override string ToString() => Title;
 }
 
 internal static class TargetWindows
 {
-    /// <summary>Visible top-level windows of other apps, Remote Play first.</summary>
+    /// <summary>Visible top-level windows of other apps, game sources first.</summary>
     internal static List<WindowItem> List()
     {
         var items = new List<WindowItem>();
@@ -29,15 +30,21 @@ internal static class TargetWindows
             if (length == 0) return true;
             var text = new StringBuilder(length + 1);
             Native.GetWindowText(window, text, text.Capacity);
-            if (Client(window) is not { Width: > 100, Height: > 100 }) return true;
+            if (Client(window) is not { Width: > 100, Height: > 100 } client) return true;
             string title = text.ToString();
             string app = "";
             try { app = Process.GetProcessById((int)process).ProcessName; } catch (ArgumentException) { } catch (InvalidOperationException) { }
             bool remotePlay = title.Contains("Remote Play", StringComparison.OrdinalIgnoreCase) || app.Contains("RemotePlay", StringComparison.OrdinalIgnoreCase);
-            items.Add(new WindowItem(window, title, remotePlay));
+            // OBS's main window shows the game only as a preview next to OBS's own text.
+            bool projector = app.StartsWith("obs", StringComparison.OrdinalIgnoreCase) &&
+                (title.Contains("Projector", StringComparison.OrdinalIgnoreCase) || title.Contains("Projektör", StringComparison.OrdinalIgnoreCase));
+            bool game = remotePlay || projector;
+            items.Add(new WindowItem(window, game ? title + " (oyun görüntüsü)" : title, game, (long)client.Width * client.Height));
             return true;
         }, IntPtr.Zero);
-        return items.OrderByDescending(i => i.IsRemotePlay).ThenBy(i => i.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
+        // The largest game source first: Remote Play's video window over its dialogs, a projector.
+        return items.OrderByDescending(i => i.IsGameSource).ThenByDescending(i => i.IsGameSource ? i.Area : 0)
+            .ThenBy(i => i.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
     /// <summary>The client area, or null when the window is minimized or too small.</summary>

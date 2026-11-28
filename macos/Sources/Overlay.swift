@@ -5,6 +5,10 @@ struct OverlayStyle: Equatable {
     var position = 4.0
     var opacity = 0.45
     var lightBackground = false
+    // Show every caption translation in one band fixed at the bottom instead of next to its line.
+    var subtitleBand = true
+    // Gap between the band and the bottom edge, as a fraction of the frame height.
+    var bandBottom = 0.02
 }
 
 @MainActor final class Overlay {
@@ -35,11 +39,20 @@ struct OverlayStyle: Equatable {
     private var anchor: CGRect?
     private var text = ""
     private var box = CGRect.zero
+    // Set for the caption band: centred, at this fraction of the frame height above its bottom.
+    private var bottom: Double?
     func show(_ text: String, box: CGRect) {
-        guard self.text != text || self.box != box else { return }
+        guard self.text != text || self.box != box || bottom != nil else { return }
         self.box = box
         self.text = text
-
+        bottom = nil
+        layout()
+    }
+    // The caption band never follows the source text, so it cannot move around the screen.
+    func showAtBottom(_ text: String, offset: Double) {
+        guard self.text != text || bottom != offset else { return }
+        self.text = text
+        bottom = offset
         layout()
     }
     func move(to frame: CGRect?, level: NSWindow.Level) {
@@ -59,15 +72,26 @@ struct OverlayStyle: Equatable {
         label.textColor = style.lightBackground ? .black : .white
         let background: NSColor = style.lightBackground ? .white : .black
         panel.contentView?.layer?.backgroundColor = background.withAlphaComponent(style.opacity).cgColor
+        let natural = (text as NSString).size(withAttributes: [.font: label.font!]).width
+        if let bottom {
+            let width = min(frame.width * 0.9, max(60, natural + 40))
+            label.preferredMaxLayoutWidth = width - 40
+            let height = min(frame.height, max(40, label.fittingSize.height + 18))
+            let y = min(frame.maxY - height, frame.minY + bottom * frame.height)
+            panel.setFrame(NSRect(x: frame.midX - width / 2, y: y, width: width, height: height), display: true)
+            label.frame = NSRect(x: 20, y: 9, width: width - 40, height: height - 18)
+            panel.orderFrontRegardless()
+            return
+        }
         let source = CGRect(x: frame.minX + box.minX * frame.width, y: frame.maxY - box.maxY * frame.height,
                             width: box.width * frame.width, height: box.height * frame.height)
-        let natural = (text as NSString).size(withAttributes: [.font: label.font!]).width
         let width = min(frame.width, max(60, min(max(220, source.width * 1.45), natural + 40)))
         label.preferredMaxLayoutWidth = width - 40
         let height = min(frame.height, max(40, label.fittingSize.height + 18))
         let left = min(frame.maxX - width, max(frame.minX, source.midX - width / 2))
         let below = source.minY - height - style.position
-        let bottom = below >= frame.minY ? below : min(frame.maxY - height, source.maxY + style.position)
+        let over = min(frame.maxY - height, source.maxY + style.position)
+        let bottom = below < frame.minY ? over : below
         panel.setFrame(NSRect(x: left, y: max(frame.minY, bottom), width: width, height: height), display: true)
         label.frame = NSRect(x: 20, y: 9, width: width - 40, height: height - 18)
         panel.orderFrontRegardless()

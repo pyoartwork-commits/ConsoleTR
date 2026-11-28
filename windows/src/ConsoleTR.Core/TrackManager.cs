@@ -22,7 +22,7 @@ public sealed class TrackManager(ITranslationProvider engine, Func<double> clock
     public int Translations { get; private set; }
     public int Hits { get; private set; }
     public double LastTranslationMs { get; private set; }
-    /// <summary>Size of the captured area in pixels; small moves below 1.5 px are ignored.</summary>
+    /// <summary>Size of the captured area in pixels; box jitter below half a line height is ignored.</summary>
     public (double Width, double Height) AnchorSize { get; set; } = (1600, 900);
     public int PendingCount => pending.Count;
 
@@ -53,10 +53,9 @@ public sealed class TrackManager(ITranslationProvider engine, Func<double> clock
             {
                 remaining.Remove(matched);
                 expiry.Remove(matched.Id);
-                var old = matched.Line.Box;
-                double shift = Math.Max(Math.Abs(old.MidX - line.Box.MidX) * AnchorSize.Width, Math.Abs(old.MidY - line.Box.MidY) * AnchorSize.Height);
-                matched.Observe(line.Text);
-                if (shift >= 1.5 || Math.Abs(old.Width - line.Box.Width) > 0.004) matched.Line = matched.Line with { Box = line.Box };
+                // Half a line height, at least 4 px, of OCR box jitter keeps the overlay still.
+                double jitter = Math.Max(4, matched.Line.Box.Height * AnchorSize.Height * 0.5);
+                matched.Observe(line.Text, line.Box, (jitter / AnchorSize.Width, jitter / AnchorSize.Height));
                 next.Add(matched);
             }
             else

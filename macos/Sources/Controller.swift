@@ -19,9 +19,13 @@ struct Track: Identifiable, Equatable {
     // The key `value` was translated from. It can lag behind `translationKey` while a
     // better OCR reading is being translated; the old value stays visible meanwhile.
     var valueKey: String?
-    // Recent raw OCR readings. Fast OCR on a moving scene misreads a few characters per
-    // frame, so the displayed text is the majority of the last readings.
-    private var reads: [String]
+    private struct Reading: Equatable {
+        let text: String
+        let box: CGRect
+    }
+    // Recent raw OCR readings. OCR on a moving scene misreads or clips parts of a line on
+    // some frames, so the displayed text is the majority of the last readings.
+    private var reads: [Reading]
     var translationKey: String { Self.key(for: line.text) }
     var needsTranslation: Bool { valueKey != translationKey }
 
@@ -30,20 +34,38 @@ struct Track: Identifiable, Equatable {
         self.value = value
         valueKey = value == nil ? nil : Self.key(for: line.text)
         shownAt = value == nil ? nil : ProcessInfo.processInfo.systemUptime
-        reads = [line.text]
+        reads = [Reading(text: line.text, box: line.box)]
     }
 
     // A translation that arrives late must stay long enough to be read once its line is gone.
     static func readingTime(_ text: String) -> Double { min(6, 1.5 + 0.06 * Double(text.count)) }
 
-    mutating func observe(_ text: String) {
-        reads.append(text)
+    // `tolerance` is the box jitter, in normalized units, that must not move the overlay.
+    mutating func observe(_ text: String, box: CGRect, tolerance: CGSize) {
+        reads.append(Reading(text: text, box: box))
         if reads.count > 5 { reads.removeFirst() }
-        let counts = Dictionary(grouping: reads, by: Self.key).mapValues(\.count)
-        let current = counts[translationKey] ?? 0
+        // A clipped reading ("Man, what…" for "Lamar: Man, what…") counts for the current text.
+        let current = translationKey
+        let counts = Dictionary(grouping: reads) { read -> String in
+            let key = Self.key(for: read.text)
+            return current.contains(key) ? current : key
+        }.mapValues(\.count)
         // Ties keep the current text so a single misread cannot restart translation.
-        let winner = counts.max { $0.value < $1.value }.flatMap { $0.value > current ? $0.key : nil } ?? translationKey
-        if let latest = reads.last(where: { Self.key(for: $0) == winner }) { line.text = latest }
+        let winner = counts.max { $0.value < $1.value }.flatMap { $0.value > counts[current, default: 0] ? $0.key : nil } ?? current
+        func loose(_ rect: CGRect) -> CGRect { rect.insetBy(dx: -tolerance.width, dy: -tolerance.height) }
+        if winner != current, let latest = reads.last(where: { Self.key(for: $0.text) == winner }) {
+            line.text = latest.text
+            line.box = latest.box
+        } else if Self.key(for: text) == current {
+            // A reading of the shown text places the overlay unless it only jitters.
+            line.text = text
+            if !loose(line.box).contains(box) || !loose(box).contains(line.box) { line.box = box }
+        } else if !loose(line.box).contains(box) {
+            // Another reading inside the box is clipped (a colored speaker name or a word lost
+            // on a bright patch) and used to shift the overlay sideways, so it changes nothing.
+            // One reaching outside the box means the line moved or was read more fully.
+            line.box = box
+        }
     }
 
     static func key(for text: String) -> String {
@@ -117,8 +139,15 @@ struct RecentTranslation: Identifiable {
     @Published var translationMS = 0.0
     @Published var needsPermission = false
     @Published var style = OverlayStyle() {
-        didSet { for overlay in overlays.values { overlay.style = style } }
+        didSet {
+            for overlay in overlays.values { overlay.style = style }
+            if oldValue.subtitleBand != style.subtitleBand || oldValue.bandBottom != style.bandBottom, running { render() }
+        }
     }
+    // Every caption has its own box, so translations placed next to each line, or a band that
+    // followed the captions, moved around the screen. Caption translations share one band fixed
+    // at the bottom; only its text changes.
+    private let bandKey = UUID()
     private var trackingTask: Task<Void, Never>?
     private var job: Task<Void, Never>?
     private var capture: LiveCapture?
@@ -200,7 +229,7 @@ struct RecentTranslation: Identifiable {
             targets = try await list()
             needsPermission = false
             if !targets.contains(where: { $0.id == selection }) {
-                selection = targets.first { $0.isRemotePlay }?.id ?? targets.first?.id ?? ""
+                selection = Self.preferredSource(targets.map { ($0.id, $0.kind, $0.area) }) ?? ""
             }
             status = targets.isEmpty ? "Açık pencere veya ekran bulunamadı." : "Kaynaklar hazır."
         } catch {
@@ -215,6 +244,13 @@ struct RecentTranslation: Identifiable {
             }
         }
     }
+    // The largest game source wins: Remote Play's video window over its dialogs, an OBS projector
+    // over everything else. OBS's main window is a last resort.
+    static func preferredSource(_ candidates: [(id: String, kind: SourceKind, area: CGFloat)]) -> String? {
+        candidates.filter { $0.kind == .game }.max { $0.area < $1.area }?.id ??
+            candidates.first { $0.kind == .other }?.id ?? candidates.first?.id
+    }
+
     func stop() {
         trackingTask?.cancel()
         trackingTask = nil
@@ -376,11 +412,10 @@ struct RecentTranslation: Identifiable {
             if let matched {
                 var track = remaining.remove(at: matched)
                 expiry.removeValue(forKey: track.id)?.cancel()
-                let old = track.line.box
-                let pixelShift = max(abs(old.midX - line.box.midX) * (anchor?.width ?? 1600),
-                                     abs(old.midY - line.box.midY) * (anchor?.height ?? 900))
-                track.observe(line.text)
-                if pixelShift >= 1.5 || abs(old.width - line.box.width) > 0.004 { track.line.box = line.box }
+                // Half a line height, at least 4 px, of OCR box jitter keeps the overlay still.
+                let size = anchor?.size ?? CGSize(width: 1600, height: 900)
+                let jitter = max(4, track.line.box.height * size.height * 0.5)
+                track.observe(line.text, box: line.box, tolerance: CGSize(width: jitter / size.width, height: jitter / size.height))
                 next.append(track)
             } else {
                 let cached = history.cached(key)
@@ -488,6 +523,12 @@ struct RecentTranslation: Identifiable {
         }
     }
 
+    // Wherever a caption was read, its translation goes to the band; none is drawn mid-screen.
+    // Objectives keep their overlay next to the objective text.
+    private func inBand(_ track: Track) -> Bool {
+        style.subtitleBand && track.line.role == .subtitle
+    }
+
     private func render() {
         // A newer translation over the place of a line that is gone replaces it.
         let onScreen = tracks.filter { expiry[$0.id] == nil }
@@ -507,15 +548,29 @@ struct RecentTranslation: Identifiable {
             recent.insert(RecentTranslation(key: key, original: track.line.text, translation: value), at: 0)
             if recent.count > 8 { recent.removeLast() }
         }
+        func overlay(_ key: UUID) -> Overlay {
+            if let existing = overlays[key] { return existing }
+            let created = Overlay()
+            overlays[key] = created
+            created.style = style
+            created.move(to: anchor, level: overlayLevel)
+            return created
+        }
         for track in tracks {
             guard let value = track.value else { continue }
-            let overlay = overlays[track.id] ?? Overlay()
-            if overlays[track.id] == nil {
-                overlays[track.id] = overlay
-                overlay.style = style
-                overlay.move(to: anchor, level: overlayLevel)
+            if inBand(track) {
+                overlays.removeValue(forKey: track.id)?.hide()
+                continue
             }
-            overlay.show(value, box: track.line.box)
+            overlay(track.id).show(value, box: track.line.box)
+        }
+        // The band shows the newest translated caption. While the next caption is still being
+        // translated, the previous one stays instead of an older line flashing in between.
+        let band = tracks.filter { inBand($0) && $0.value != nil }
+        if let value = band.max(by: { $0.since < $1.since })?.value {
+            overlay(bandKey).showAtBottom(value, offset: style.bandBottom)
+        } else {
+            overlays.removeValue(forKey: bandKey)?.hide()
         }
         status = tracks.isEmpty ? "Metin bekleniyor…" : "Metinler izleniyor."
     }

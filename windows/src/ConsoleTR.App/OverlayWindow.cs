@@ -7,7 +7,9 @@ using ConsoleTR.Core;
 
 namespace ConsoleTR.App;
 
-internal sealed record OverlayStyle(double FontSize = 23, double Position = 4, double Opacity = 0.45, bool Light = false);
+/// <param name="BandBottom">Gap between the caption band and the bottom edge, as a fraction of the frame height.</param>
+internal sealed record OverlayStyle(double FontSize = 23, double Position = 4, double Opacity = 0.45, bool Light = false,
+                                    bool SubtitleBand = true, double BandBottom = 0.02);
 
 /// <summary>A click-through, always-on-top translation bubble next to the source text.</summary>
 internal sealed class OverlayWindow : Window
@@ -50,15 +52,34 @@ internal sealed class OverlayWindow : Window
         };
     }
 
-    /// <summary>Places the translation below the source text, or above it near the bottom edge.</summary>
-    internal void Present(string text, NormRect box, PixelRect frame, OverlayStyle style)
+    /// <summary>The caption band: centred, fixed above the bottom edge, never following the source text.</summary>
+    internal void PresentAtBottom(string text, PixelRect frame, OverlayStyle style)
     {
         double scale = frame.DpiScale;
+        Apply(text, style);
+        label.MaxWidth = Math.Max(20, frame.Width * 0.9 / scale - 40);
+        if (!IsVisible) Show();
+        UpdateLayout();
+        double width = ActualWidth * scale, height = ActualHeight * scale;
+        double top = Math.Max(frame.Y, frame.Y + frame.Height * (1 - style.BandBottom) - height);
+        Native.SetWindowPos(handle, Native.HWND_TOPMOST, (int)Math.Round(frame.X + frame.Width / 2.0 - width / 2), (int)Math.Round(top), 0, 0,
+            Native.SWP_NOSIZE | Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
+    }
+
+    private void Apply(string text, OverlayStyle style)
+    {
         label.Text = text;
         label.FontSize = style.FontSize;
         label.Foreground = style.Light ? Brushes.Black : Brushes.White;
         byte alpha = (byte)Math.Clamp(style.Opacity * 255, 0, 255);
         border.Background = new SolidColorBrush(style.Light ? Color.FromArgb(alpha, 255, 255, 255) : Color.FromArgb(alpha, 0, 0, 0));
+    }
+
+    /// <summary>Places the translation below the source text, or above it near the bottom edge.</summary>
+    internal void Present(string text, NormRect box, PixelRect frame, OverlayStyle style)
+    {
+        double scale = frame.DpiScale;
+        Apply(text, style);
         double sourceX = frame.X + box.MinX * frame.Width, sourceY = frame.Y + box.MinY * frame.Height;
         double sourceWidth = box.Width * frame.Width, sourceHeight = box.Height * frame.Height;
         double widest = Math.Min(frame.Width, Math.Max(220 * scale, sourceWidth * 1.45));

@@ -21,6 +21,10 @@ struct Controls: View {
                         }
                         Button(model.loading ? "Aranıyor…" : "Kaynakları getir") { Task { await model.refresh() } }.disabled(model.loading || model.picking)
                     }
+                    if model.targets.first(where: { $0.id == model.selection })?.kind == .obsMain {
+                        Text("OBS’in ana penceresi seçili: ConsoleTR oyunu küçük önizlemeden ve OBS’in kendi yazılarıyla birlikte okur. Oyun için “Projektör” penceresini seçin.")
+                            .font(.caption).foregroundStyle(.orange)
+                    }
                     Button("macOS ile pencere seç…") { model.chooseWindow() }.disabled(model.loading || model.picking)
                     if model.needsPermission {
                         Button("Ekran kaydı ayarlarını aç") { model.openCaptureSettings() }
@@ -65,6 +69,14 @@ struct Controls: View {
                     GridRow { Text("Arka plan opaklığı"); Slider(value: $model.style.opacity, in: 0...1); Text("%\(Int(model.style.opacity * 100))") }
                 }
                 Toggle("Açık renk arka plan", isOn: $model.style.lightBackground)
+                Toggle("Altyazı çevirisini altta sabit şeritte göster", isOn: $model.style.subtitleBand)
+                if model.style.subtitleBand {
+                    HStack {
+                        Text("Şeridin alttan uzaklığı")
+                        Slider(value: $model.style.bandBottom, in: 0...0.4)
+                        Text("%\(Int(model.style.bandBottom * 100))")
+                    }
+                }
             }
             HStack {
                 Button(model.running ? "Durdur" : "Başlat") { if model.running { model.stop() } else { model.start() } }

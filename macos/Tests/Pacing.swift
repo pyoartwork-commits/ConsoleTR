@@ -42,6 +42,8 @@ import ScreenCaptureKit
         _ = label("Retrieve the package", CGPoint(x: 500, y: 350))
         let caption = label("", CGPoint(x: 120, y: 50), width: 560)
         caption.alignment = .center
+        let standing = label("", CGPoint(x: 120, y: 125), width: 560)
+        standing.alignment = .center
         game.orderFrontRegardless()
         defer { game.orderOut(nil) }
         try await Task.sleep(for: .milliseconds(350))
@@ -95,6 +97,10 @@ import ScreenCaptureKit
         caption.stringValue = "Wait for me."
         try await wait("İlk altyazı çevrilmedi.") { shown().contains("TR: Wait for me.") }
         try await Task.sleep(for: .milliseconds(300))
+        func panel(_ text: String) -> NSWindow? {
+            app.windows.first { $0 is NSPanel && $0.isVisible && $0.contentView?.subviews.contains { ($0 as? NSTextField)?.stringValue == text } == true }
+        }
+        let firstBand = panel("TR: Wait for me.")?.frame
         caption.stringValue = "Follow me."
         var gaps = 0, samples = 0
         while !shown().contains("TR: Follow me.") {
@@ -107,6 +113,15 @@ import ScreenCaptureKit
         let captions = shown().filter { $0 == "TR: Wait for me." || $0 == "TR: Follow me." }
         print("Geçişte boş örnek:", gaps, "/", samples, "geçişten sonra altyazı katmanları:", captions)
         guard gaps == 0, captions == ["TR: Follow me."] else { throw AppFailure("Altyazı geçişinde boşluk veya çift katman oluştu.") }
+        // Both captions are shown in one band fixed at the bottom of the window, centred, at the
+        // same height, although "Follow me." is shorter than "Wait for me.".
+        let fixedBottom = game.frame.minY + model.style.bandBottom * game.frame.height
+        guard let firstBand, let secondBand = panel("TR: Follow me.")?.frame,
+              abs(firstBand.minY - fixedBottom) < 1, abs(secondBand.minY - fixedBottom) < 1,
+              abs(firstBand.midX - game.frame.midX) < 2, abs(secondBand.midX - game.frame.midX) < 2 else {
+            throw AppFailure("Altyazı şeridi altta sabit durmadı.")
+        }
+        print("Altyazı şeridi iki satırda aynı yerde:", Int(firstBand.minY), Int(secondBand.minY), "pencere ortası:", Int(game.frame.midX), Int(secondBand.midX))
 
         // 4. Translations remain listed in memory after they leave the screen.
         let pairs = model.recent.map { "\($0.original) → \($0.translation)" }
@@ -114,6 +129,35 @@ import ScreenCaptureKit
         guard pairs.contains("Kratos: Open the door. → TR: Kratos: Open the door."), pairs.first == "Follow me. → TR: Follow me." else {
             throw AppFailure("Son çeviriler listesi eksik.")
         }
-        print("Tek sıralı çeviri önceliği, okuma süresi, kesintisiz geçiş ve son çeviriler testleri geçti.")
+        // 5. A line that stays on screen near the captions (like a status bar did) must not flash
+        //    in the band while the next caption is being translated.
+        caption.stringValue = ""
+        standing.stringValue = "Stay with me."
+        try await wait("Sabit satır çevrilmedi.") { model.recent.contains { $0.original == "Stay with me." } }
+        caption.stringValue = "Okay, so what, we just wait?"
+        try await wait("Altyazı çevrilmedi.") { shown().contains("TR: Okay, so what, we just wait?") }
+        try await Task.sleep(for: .milliseconds(300))
+        caption.stringValue = "Sit tight."
+        var flashes = 0, steps = 0
+        while !shown().contains("TR: Sit tight.") {
+            steps += 1
+            if shown().contains("TR: Stay with me.") { flashes += 1 }
+            if steps > 400 { throw AppFailure("Yeni altyazı çevrilmedi.") }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        print("Geçişte sabit satırın şeride girdiği örnek:", flashes, "/", steps)
+        guard flashes == 0 else { throw AppFailure("Ekranda duran başka bir satır altyazılar arasında şeride girdi.") }
+
+        // 6. A caption read mid-screen still goes to the fixed band at the bottom.
+        standing.stringValue = ""
+        caption.frame.origin.y = 230
+        caption.stringValue = "We need to talk about Ciri."
+        try await wait("Ortadaki altyazı çevrilmedi.") { panel("TR: We need to talk about Ciri.") != nil }
+        guard let middle = panel("TR: We need to talk about Ciri.")?.frame,
+              abs(middle.minY - fixedBottom) < 1, abs(middle.midX - game.frame.midX) < 2 else {
+            throw AppFailure("Ekranın ortasında okunan altyazının çevirisi alttaki şeride gitmedi.")
+        }
+        print("Ortada okunan altyazının çevirisi altta:", Int(middle.minY), "beklenen:", Int(fixedBottom))
+        print("Tek sıralı çeviri önceliği, okuma süresi, kesintisiz geçiş, sabit altyazı şeridi ve son çeviriler testleri geçti.")
     }
 }

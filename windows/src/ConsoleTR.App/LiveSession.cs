@@ -13,6 +13,8 @@ internal sealed class LiveSession
     private readonly WindowsOcr ocr;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly Dictionary<Guid, OverlayWindow> overlays = [];
+    // One shared overlay, fixed at the bottom, for every caption translation; see SubtitleBand.
+    private static readonly Guid BandKey = Guid.NewGuid();
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private PixelRect? frame;
     private bool busy, enabled = true;
@@ -109,8 +111,11 @@ internal sealed class LiveSession
 
     private void SyncOverlays(PixelRect? area)
     {
-        var shown = Manager.Tracks.Where(t => t.Value is not null).ToDictionary(t => t.Id);
-        foreach (var id in overlays.Keys.Where(id => area is null || !shown.ContainsKey(id)).ToList())
+        bool banded = Style.SubtitleBand;
+        var bandTrack = banded ? SubtitleBand.Pick(Manager.Tracks) : null;
+        // Lines in the band get no overlay of their own.
+        var shown = Manager.Tracks.Where(t => t.Value is not null && !(banded && SubtitleBand.Holds(t))).ToDictionary(t => t.Id);
+        foreach (var id in overlays.Keys.Where(id => area is null || (id == BandKey ? bandTrack is null : !shown.ContainsKey(id))).ToList())
         {
             overlays[id].Close();
             overlays.Remove(id);
@@ -120,6 +125,11 @@ internal sealed class LiveSession
         {
             if (!overlays.TryGetValue(track.Id, out var overlay)) overlays[track.Id] = overlay = new OverlayWindow();
             overlay.Present(track.Value!, track.Line.Box, area, Style);
+        }
+        if (bandTrack is not null)
+        {
+            if (!overlays.TryGetValue(BandKey, out var overlay)) overlays[BandKey] = overlay = new OverlayWindow();
+            overlay.PresentAtBottom(bandTrack.Value!, area, Style);
         }
         Updated?.Invoke();
     }

@@ -110,6 +110,46 @@ public class TrackManagerTests
     }
 
     [Fact]
+    public void ClippedReadingsDoNotMoveTheOverlay()
+    {
+        var manager = new TrackManager(new DemoProvider(), () => now);
+        const string full = "Lamar: Man, what you doin' here, dog? Get in the car.";
+        var box = new NormRect(0.28, 0.85, 0.44, 0.04);
+        manager.Receive([new Detection(TextRole.Subtitle, full, box)]);
+        // A colored speaker name or a bright background drops part of the line on some frames.
+        var clipped = new[]
+        {
+            new Detection(TextRole.Subtitle, "Man, what you doin' here, dog? Get in the car.", new NormRect(0.335, 0.85, 0.385, 0.04)),
+            new Detection(TextRole.Subtitle, "Lamar: Man, what you doin' here, dog?", new NormRect(0.28, 0.85, 0.31, 0.04)),
+        };
+        foreach (var reading in clipped.Concat(clipped).Concat(clipped)) manager.Receive([reading]);
+        var track = Assert.Single(manager.Tracks);
+        Assert.Equal(box, track.Line.Box);
+        Assert.Equal(full, track.Line.Text);
+        Assert.Equal("TR: " + full, track.Value);
+    }
+
+    [Fact]
+    public void SmallJitterIsIgnoredButARealMoveIsFollowed()
+    {
+        var manager = new TrackManager(new DemoProvider(), () => now);
+        var box = new NormRect(0.70, 0.20, 0.15, 0.03);
+        manager.Receive([new Detection(TextRole.Objective, "Find the key", box)]);
+        // 2 px of OCR jitter on a 1600 x 900 capture.
+        manager.Receive([new Detection(TextRole.Objective, "Find the key", box with { X = box.X + 2.0 / 1600, Width = box.Width - 1.0 / 1600 })]);
+        Assert.Equal(box, manager.Tracks.Single().Line.Box);
+        // The objective really moves 48 px to the right.
+        var moved = box with { X = box.X + 48.0 / 1600 };
+        manager.Receive([new Detection(TextRole.Objective, "Find the key", moved)]);
+        Assert.Equal(moved, manager.Tracks.Single().Line.Box);
+        // A moved line read slightly differently is followed at once, before any vote.
+        var again = moved with { X = moved.X + 48.0 / 1600 };
+        manager.Receive([new Detection(TextRole.Objective, "Find the keya", again)]);
+        Assert.Equal(again, manager.Tracks.Single().Line.Box);
+        Assert.Equal("Find the key", manager.Tracks.Single().Line.Text);
+    }
+
+    [Fact]
     public void RecentListKeepsTheLatestEight()
     {
         // Distinct lines; near-identical ones would count as OCR variants of one line.

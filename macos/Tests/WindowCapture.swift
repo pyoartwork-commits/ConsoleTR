@@ -41,6 +41,8 @@ import ScreenCaptureKit
         let target = CaptureTarget(id: "test", title: window.title,
                                    filter: SCContentFilter(desktopIndependentWindow: source), displayID: nil, windowID: source.windowID)
         let model = Controller()
+        // This suite checks overlays placed next to their own lines.
+        model.style.subtitleBand = false
         model.provider = .demo
         model.live = true
         model.targets = [target]
