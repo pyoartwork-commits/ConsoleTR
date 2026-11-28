@@ -13,9 +13,8 @@ internal sealed class LiveSession
     private readonly WindowsOcr ocr;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly Dictionary<Guid, OverlayWindow> overlays = [];
-    // One shared overlay for lower-half captions; see SubtitleBand.
+    // One shared overlay, fixed at the bottom, for every caption translation; see SubtitleBand.
     private static readonly Guid BandKey = Guid.NewGuid();
-    private readonly SubtitleBand band = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private PixelRect? frame;
     private bool busy, enabled = true;
@@ -93,7 +92,6 @@ internal sealed class LiveSession
                 l.Box.MidX >= zone.Rect.MinX && l.Box.MidX <= zone.Rect.MaxX && l.Box.MidY >= zone.Rect.MinY && l.Box.MidY <= zone.Rect.MaxY).ToList())));
             Manager.AnchorSize = (frame.Width, frame.Height);
             Manager.Receive(detections);
-            if (band.Update(Manager.OnScreen, clock.Elapsed.TotalSeconds, frame.Height)) SyncOverlays(frame);
             StatusChanged?.Invoke(Manager.Tracks.Count == 0 ? "Metin bekleniyor…" : "Metinler izleniyor.");
             Updated?.Invoke();
         }
@@ -114,7 +112,7 @@ internal sealed class LiveSession
     private void SyncOverlays(PixelRect? area)
     {
         bool banded = Style.SubtitleBand;
-        var bandTrack = banded && band.Top is not null ? SubtitleBand.Pick(Manager.Tracks) : null;
+        var bandTrack = banded ? SubtitleBand.Pick(Manager.Tracks) : null;
         // Lines in the band get no overlay of their own.
         var shown = Manager.Tracks.Where(t => t.Value is not null && !(banded && SubtitleBand.Holds(t))).ToDictionary(t => t.Id);
         foreach (var id in overlays.Keys.Where(id => area is null || (id == BandKey ? bandTrack is null : !shown.ContainsKey(id))).ToList())
@@ -131,7 +129,7 @@ internal sealed class LiveSession
         if (bandTrack is not null)
         {
             if (!overlays.TryGetValue(BandKey, out var overlay)) overlays[BandKey] = overlay = new OverlayWindow();
-            overlay.Present(bandTrack.Value!, new NormRect(0.1, band.Top!.Value, 0.8, 0), area, Style, above: true);
+            overlay.PresentAtBottom(bandTrack.Value!, area, Style);
         }
         Updated?.Invoke();
     }

@@ -1,34 +1,14 @@
 namespace ConsoleTR.Core;
 
 /// <summary>
-/// Every caption has its own box, so translations placed next to each line moved with every
-/// new line. Lower-half captions share one band just above them; only its text changes.
-/// Mirrors the band in macos/Sources/Controller.swift.
+/// Every caption has its own box, so translations placed next to each line, or a band that
+/// followed the captions, moved around the screen. Caption translations share one band fixed at
+/// the bottom of the frame; only its text changes. Mirrors the band in macos/Sources/Controller.swift.
 /// </summary>
-public sealed class SubtitleBand
+public static class SubtitleBand
 {
-    private readonly List<(double Time, double Top)> samples = [];
-
-    /// <summary>Top of the band's source area, normalized; the band sits above it.</summary>
-    public double? Top { get; private set; }
-
-    // Captions sit low and centred. Off-centre lines, such as a phone card in a corner, keep their
-    // own overlay next to them.
-    public static bool Holds(Track track) =>
-        track.Line.Role == TextRole.Subtitle && track.Line.Box.MidY >= 0.6 && Math.Abs(track.Line.Box.MidX - 0.5) < 0.25;
-
-    /// <summary>Follows the tallest caption of the last 10 s, ignoring less than 8 px of OCR jitter.</summary>
-    /// <returns>Whether the band moved.</returns>
-    public bool Update(IEnumerable<Track> onScreen, double now, double frameHeight)
-    {
-        foreach (var track in onScreen.Where(Holds)) samples.Add((now, track.Line.Box.MinY));
-        samples.RemoveAll(s => now - s.Time > 10);
-        if (samples.Count == 0) return false;
-        double top = samples.Min(s => s.Top);
-        if (Top is { } current && Math.Abs(top - current) * frameHeight < 8) return false;
-        Top = top;
-        return true;
-    }
+    /// <summary>Wherever a caption was read, its translation goes to the band. Objectives keep their own overlay.</summary>
+    public static bool Holds(Track track) => track.Line.Role == TextRole.Subtitle;
 
     /// <summary>
     /// The newest translated caption. While the next caption is still being translated, the

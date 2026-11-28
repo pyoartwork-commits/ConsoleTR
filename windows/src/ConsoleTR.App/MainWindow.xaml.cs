@@ -75,7 +75,8 @@ public partial class MainWindow : Window
         };
     }
 
-    private OverlayStyle CurrentStyle() => new(FontSlider.Value, 4, OpacitySlider.Value, SubtitleBand: BandCheck.IsChecked == true);
+    private OverlayStyle CurrentStyle() =>
+        new(FontSlider.Value, 4, OpacitySlider.Value, SubtitleBand: BandCheck.IsChecked == true, BandBottom: BandSlider.Value);
 
     private void BandCheck_Click(object sender, RoutedEventArgs e)
     {

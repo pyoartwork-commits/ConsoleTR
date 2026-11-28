@@ -113,12 +113,13 @@ import ScreenCaptureKit
         let captions = shown().filter { $0 == "TR: Wait for me." || $0 == "TR: Follow me." }
         print("Geçişte boş örnek:", gaps, "/", samples, "geçişten sonra altyazı katmanları:", captions)
         guard gaps == 0, captions == ["TR: Follow me."] else { throw AppFailure("Altyazı geçişinde boşluk veya çift katman oluştu.") }
-        // Both captions are shown in one band centred on the window, above the caption, at the
+        // Both captions are shown in one band fixed at the bottom of the window, centred, at the
         // same height, although "Follow me." is shorter than "Wait for me.".
+        let fixedBottom = game.frame.minY + model.style.bandBottom * game.frame.height
         guard let firstBand, let secondBand = panel("TR: Follow me.")?.frame,
-              abs(firstBand.minY - secondBand.minY) < 1, abs(firstBand.midX - game.frame.midX) < 2,
-              abs(secondBand.midX - game.frame.midX) < 2, secondBand.minY > game.frame.minY + 60 else {
-            throw AppFailure("Altyazı şeridi sabit durmadı.")
+              abs(firstBand.minY - fixedBottom) < 1, abs(secondBand.minY - fixedBottom) < 1,
+              abs(firstBand.midX - game.frame.midX) < 2, abs(secondBand.midX - game.frame.midX) < 2 else {
+            throw AppFailure("Altyazı şeridi altta sabit durmadı.")
         }
         print("Altyazı şeridi iki satırda aynı yerde:", Int(firstBand.minY), Int(secondBand.minY), "pencere ortası:", Int(game.frame.midX), Int(secondBand.midX))
 
@@ -146,6 +147,17 @@ import ScreenCaptureKit
         }
         print("Geçişte sabit satırın şeride girdiği örnek:", flashes, "/", steps)
         guard flashes == 0 else { throw AppFailure("Ekranda duran başka bir satır altyazılar arasında şeride girdi.") }
+
+        // 6. A caption read mid-screen still goes to the fixed band at the bottom.
+        standing.stringValue = ""
+        caption.frame.origin.y = 230
+        caption.stringValue = "We need to talk about Ciri."
+        try await wait("Ortadaki altyazı çevrilmedi.") { panel("TR: We need to talk about Ciri.") != nil }
+        guard let middle = panel("TR: We need to talk about Ciri.")?.frame,
+              abs(middle.minY - fixedBottom) < 1, abs(middle.midX - game.frame.midX) < 2 else {
+            throw AppFailure("Ekranın ortasında okunan altyazının çevirisi alttaki şeride gitmedi.")
+        }
+        print("Ortada okunan altyazının çevirisi altta:", Int(middle.minY), "beklenen:", Int(fixedBottom))
         print("Tek sıralı çeviri önceliği, okuma süresi, kesintisiz geçiş, sabit altyazı şeridi ve son çeviriler testleri geçti.")
     }
 }

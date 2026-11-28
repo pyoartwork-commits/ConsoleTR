@@ -69,7 +69,14 @@ struct Controls: View {
                     GridRow { Text("Arka plan opaklığı"); Slider(value: $model.style.opacity, in: 0...1); Text("%\(Int(model.style.opacity * 100))") }
                 }
                 Toggle("Açık renk arka plan", isOn: $model.style.lightBackground)
-                Toggle("Altyazı çevirisini sabit şeritte göster", isOn: $model.style.subtitleBand)
+                Toggle("Altyazı çevirisini altta sabit şeritte göster", isOn: $model.style.subtitleBand)
+                if model.style.subtitleBand {
+                    HStack {
+                        Text("Şeridin alttan uzaklığı")
+                        Slider(value: $model.style.bandBottom, in: 0...0.4)
+                        Text("%\(Int(model.style.bandBottom * 100))")
+                    }
+                }
             }
             HStack {
                 Button(model.running ? "Durdur" : "Başlat") { if model.running { model.stop() } else { model.start() } }

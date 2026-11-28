@@ -141,14 +141,13 @@ struct RecentTranslation: Identifiable {
     @Published var style = OverlayStyle() {
         didSet {
             for overlay in overlays.values { overlay.style = style }
-            if oldValue.subtitleBand != style.subtitleBand, running { render() }
+            if oldValue.subtitleBand != style.subtitleBand || oldValue.bandBottom != style.bandBottom, running { render() }
         }
     }
-    // Every caption has its own box, so translations placed next to each line moved with every
-    // new line. Lower-half captions share one band above them; only its text changes.
+    // Every caption has its own box, so translations placed next to each line, or a band that
+    // followed the captions, moved around the screen. Caption translations share one band fixed
+    // at the bottom; only its text changes.
     private let bandKey = UUID()
-    private var bandSamples: [(time: Double, top: CGFloat)] = []
-    private var bandTop: CGFloat?
     private var trackingTask: Task<Void, Never>?
     private var job: Task<Void, Never>?
     private var capture: LiveCapture?
@@ -284,8 +283,6 @@ struct RecentTranslation: Identifiable {
             ? [ScanZone(role: .subtitle, rect: subtitle), ScanZone(role: .objective, rect: objectiveRegion)]
             : [ScanZone(role: nil, rect: region)]
         history = SubtitleHistory()
-        bandSamples = []
-        bandTop = nil
         reader = SubtitleReader()
         translations = 0; hits = 0
         recent = []
@@ -449,8 +446,7 @@ struct RecentTranslation: Identifiable {
                 requestTranslations()
             }
         }
-        let bandMoved = updateBand(next)
-        if tracks != next || bandMoved {
+        if tracks != next {
             tracks = next
             render()
         }
@@ -527,21 +523,10 @@ struct RecentTranslation: Identifiable {
         }
     }
 
+    // Wherever a caption was read, its translation goes to the band; none is drawn mid-screen.
+    // Objectives keep their overlay next to the objective text.
     private func inBand(_ track: Track) -> Bool {
-        // Captions sit low and centred. Off-centre lines, such as a phone card in a corner, keep
-        // their own overlay next to them.
-        style.subtitleBand && track.line.role == .subtitle && track.line.box.midY >= 0.6 && abs(track.line.box.midX - 0.5) < 0.25
-    }
-
-    // The band sits just above the tallest caption of the last 10 s and ignores OCR jitter.
-    private func updateBand(_ lines: [Track]) -> Bool {
-        let now = ProcessInfo.processInfo.systemUptime
-        for track in lines where expiry[track.id] == nil && inBand(track) { bandSamples.append((now, track.line.box.minY)) }
-        bandSamples.removeAll { now - $0.time > 10 }
-        guard let top = bandSamples.map(\.top).min() else { return false }
-        if let bandTop, abs(top - bandTop) * (anchor?.height ?? 900) < 8 { return false }
-        bandTop = top
-        return true
+        style.subtitleBand && track.line.role == .subtitle
     }
 
     private func render() {
@@ -582,9 +567,8 @@ struct RecentTranslation: Identifiable {
         // The band shows the newest translated caption. While the next caption is still being
         // translated, the previous one stays instead of an older line flashing in between.
         let band = tracks.filter { inBand($0) && $0.value != nil }
-        if let shown = band.max(by: { $0.since < $1.since }),
-           let value = shown.value, let bandTop {
-            overlay(bandKey).show(value, box: CGRect(x: 0.1, y: bandTop, width: 0.8, height: 0), above: true)
+        if let value = band.max(by: { $0.since < $1.since })?.value {
+            overlay(bandKey).showAtBottom(value, offset: style.bandBottom)
         } else {
             overlays.removeValue(forKey: bandKey)?.hide()
         }
